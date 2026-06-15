@@ -4,6 +4,7 @@ import ApiKeySettings from './ApiKeySettings.jsx'
 
 export default function Nav({ onApiKeyClear }) {
   const navigate = useNavigate()
+  const [h0, setH0] = useState(false)
   const [h1, setH1] = useState(false)
   const [h2, setH2] = useState(false)
 
@@ -38,6 +39,14 @@ export default function Nav({ onApiKeyClear }) {
       </button>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+        <button
+          onClick={() => navigate('/library')}
+          onMouseEnter={() => setH0(true)}
+          onMouseLeave={() => setH0(false)}
+          style={linkStyle(h0)}
+        >
+          Library
+        </button>
         <button
           onClick={() => navigate('/persona/new')}
           onMouseEnter={() => setH1(true)}

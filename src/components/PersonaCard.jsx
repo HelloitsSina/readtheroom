@@ -20,7 +20,14 @@ export default function PersonaCard({ persona, onClick, onDelete }) {
       <div style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div>
-            <h3 style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#f5f5f5', lineHeight: 1.2 }}>{persona.name}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#f5f5f5', lineHeight: 1.2 }}>{persona.name}</h3>
+              {persona.isExample && (
+                <span style={{ fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#00ff88', border: '1px solid rgba(0,255,136,0.35)', padding: '2px 6px', flexShrink: 0, fontFamily: 'monospace' }}>
+                  EXAMPLE
+                </span>
+              )}
+            </div>
             <p style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', marginTop: '4px' }}>{persona.role}</p>
           </div>
           <button

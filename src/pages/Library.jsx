@@ -1,16 +1,73 @@
 import { useState, useEffect, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPersonas, deletePersona } from '../lib/storage.js'
+import { getPersonas, deletePersona, savePersona } from '../lib/storage.js'
 import { getSessions, deleteSession } from '../lib/sessions.js'
+import { ROLES } from '../data/roles.js'
 import PersonaCard from '../components/PersonaCard.jsx'
 import Nav from '../components/Nav.jsx'
 import Footer from '../components/Footer.jsx'
+import { v4 as uuid } from 'uuid'
+
+const EXAMPLE_PROPOSAL = `I want to propose shifting our Apex customer support model from reactive to proactive. Specifically: assigning 0.5 FTE to run a structured outreach program in the two weeks before each assessment window, helping schools prepare rather than waiting for them to report problems.
+
+The business case is that schools who are well prepared have fewer escalations, higher satisfaction scores, and are more likely to renew and expand. Last assessment cycle we had 34 escalations in a 10 day window, most were preventable with earlier contact.
+
+I am asking for 0.5 FTE (reallocation, not new hire) and sign off to build a simple outreach playbook. Total cost is internal time only. Pilot would run for one assessment cycle before formal review.`
+
+const EXAMPLE_PERSONAS = [
+  {
+    name: 'James Whitfield',
+    role: 'Head of Customer Success',
+    isExample: true,
+    rawNotes: `James has been at Edrolo for 4 years and came from a SaaS background before edtech. He is supportive of the team but very focused on efficiency metrics. He regularly references NPS, time-to-resolution, and renewal rates in team meetings.
+
+In our last 1:1 he said: "I want us to be known for the best support in edtech, but I need to see that we are not just adding headcount without a clear output."
+
+He tends to approve proposals that come with data. He gets nervous about anything that requires cross-team coordination without a clear owner. He prefers to be looped in early and does not like surprises before leadership meetings.
+
+He will ask: what does success look like after one cycle, and how do we know if this is working? He also wants to know that the wider team is on board before this goes up. Warm in person, terse on Slack. If he goes quiet in a meeting he is either unconvinced or already thinking about how to position it upward.`,
+    communicationStyle: 'Data-driven and efficiency-focused. Warm in person, terse on Slack. Goes quiet when unconvinced.',
+    priorities: ['efficiency metrics', 'NPS and renewal rates', 'clear ownership', 'no surprises before leadership meetings'],
+    likelyObjections: ['What does success look like after one cycle?', 'How do we know if this is working?', 'Is the wider team on board?'],
+    respondsWellTo: ['proposals backed by data', 'early looping in', 'clear ownership and accountability'],
+    watchOutFor: ['cross-team coordination without a clear owner', 'surprises before leadership meetings', 'silence in meetings means doubt'],
+    defaultRoleOverride: 'manager',
+  },
+  {
+    name: 'Culture Coach',
+    role: 'Australian Workplace Cultural Translator',
+    isExample: true,
+    rawNotes: `Focus areas for this proposal:
+
+The presenter is from an East Asian background and tends to lead with the solution and the detail before establishing the problem and the relationship context. In Australian leadership meetings, this can read as presumptuous or under-consulted.
+
+Key patterns to watch: Has the problem been named clearly before the fix is presented? Has the presenter signalled that others' input shaped the proposal, rather than presenting it as a solo idea? Is the ask framed as "I want to try this" or "I have been working through this with the team and wanted to bring it forward"?
+
+The meeting before the meeting matters here. Key stakeholders need a soft heads up before this hits a formal setting. Springing a request in a group meeting without pre-alignment will create resistance even from people who might otherwise support it.`,
+    communicationStyle: 'Empathetic and specific. Gives concrete reframes without being condescending.',
+    priorities: ['naming the problem before the fix', 'signalling team input', 'the meeting before the meeting'],
+    likelyObjections: ['Has the problem been named clearly?', 'Does this read as a solo idea?', 'Have key stakeholders had a soft heads up?'],
+    respondsWellTo: ['framing ideas as team-developed', 'pre-alignment before formal settings', 'leading with the problem'],
+    watchOutFor: ['leading with solution before problem', 'presenting as solo idea', 'skipping informal pre-alignment steps'],
+    defaultRoleOverride: 'culture',
+    extraContext: `Focus areas for this proposal:
+
+The presenter is from an East Asian background and tends to lead with the solution and the detail before establishing the problem and the relationship context. In Australian leadership meetings, this can read as presumptuous or under-consulted.
+
+Key patterns to watch: Has the problem been named clearly before the fix is presented? Has the presenter signalled that others' input shaped the proposal, rather than presenting it as a solo idea? Is the ask framed as "I want to try this" or "I have been working through this with the team and wanted to bring it forward"?
+
+The meeting before the meeting matters here. Key stakeholders need a soft heads up before this hits a formal setting. Springing a request in a group meeting without pre-alignment will create resistance even from people who might otherwise support it.`,
+  },
+]
+
+const EXAMPLE_PROPOSAL_KEY = 'readtheroom_example_proposal'
 
 export default function Library({ onApiKeyClear }) {
   const [tab, setTab] = useState('personas')
   const [personas, setPersonas] = useState([])
   const [sessions, setSessions] = useState([])
   const [expandedSession, setExpandedSession] = useState(null)
+  const [viewingRole, setViewingRole] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -27,6 +84,21 @@ export default function Library({ onApiKeyClear }) {
     deleteSession(id)
     setSessions(getSessions())
     if (expandedSession === id) setExpandedSession(null)
+  }
+
+  function handleLoadExamples() {
+    const now = new Date().toISOString()
+    EXAMPLE_PERSONAS.forEach(ep => {
+      const persona = {
+        id: uuid(),
+        ...ep,
+        updatedAt: now,
+        createdAt: now,
+      }
+      savePersona(persona)
+    })
+    localStorage.setItem(EXAMPLE_PROPOSAL_KEY, EXAMPLE_PROPOSAL)
+    setPersonas(getPersonas())
   }
 
   const tabStyle = (active) => ({
@@ -52,9 +124,11 @@ export default function Library({ onApiKeyClear }) {
             </h2>
           </div>
           {tab === 'personas' && (
-            <button onClick={() => navigate('/persona/new')} className="btn-secondary" style={{ fontSize: '0.7rem', padding: '8px 18px' }}>
-              + New Persona
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => navigate('/persona/new')} className="btn-secondary" style={{ fontSize: '0.7rem', padding: '8px 18px' }}>
+                + New Persona
+              </button>
+            </div>
           )}
         </div>
 
@@ -70,25 +144,57 @@ export default function Library({ onApiKeyClear }) {
 
         {/* Personas tab */}
         {tab === 'personas' && (
-          personas.length === 0 ? (
-            <EmptyState
-              icon="[ ]"
-              title="No personas yet"
-              sub="Add your first persona to get started"
-              action="+ Add Persona"
-              onAction={() => navigate('/persona/new')}
-            />
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-              {personas.map(persona => (
-                <PersonaCard
-                  key={persona.id} persona={persona}
-                  onClick={() => navigate(`/persona/${persona.id}`)}
-                  onDelete={() => handleDeletePersona(persona.id)}
-                />
-              ))}
+          <div>
+            {/* Default Roles section */}
+            <div style={{ marginBottom: '40px' }}>
+              <p className="label" style={{ marginBottom: '16px', letterSpacing: '0.14em' }}>
+                DEFAULT ROLES, ALWAYS IN THE ROOM
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+                {ROLES.map(role => (
+                  <DefaultRoleCard key={role.id} role={role} onClick={() => setViewingRole(role)} />
+                ))}
+              </div>
             </div>
-          )
+
+            {/* Your Personas section */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <p className="label" style={{ letterSpacing: '0.14em' }}>YOUR PERSONAS</p>
+                {personas.length === 0 && (
+                  <button
+                    onClick={handleLoadExamples}
+                    className="btn-secondary"
+                    style={{ fontSize: '0.65rem', padding: '6px 14px' }}
+                  >
+                    Try Example Personas
+                  </button>
+                )}
+              </div>
+
+              {personas.length === 0 ? (
+                <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                  <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '2.5rem', fontWeight: 800, color: '#222', marginBottom: '20px' }}>[ ]</p>
+                  <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: '1.1rem', color: '#f5f5f5', marginBottom: '8px' }}>No personas yet</p>
+                  <p className="label" style={{ marginBottom: '28px' }}>Add your first persona or try the examples to see how it works</p>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button onClick={() => navigate('/persona/new')} className="btn-primary" style={{ padding: '12px 28px' }}>+ Add Persona</button>
+                    <button onClick={handleLoadExamples} className="btn-secondary" style={{ padding: '12px 28px' }}>Try Example Personas</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+                  {personas.map(persona => (
+                    <PersonaCard
+                      key={persona.id} persona={persona}
+                      onClick={() => navigate(`/persona/${persona.id}`)}
+                      onDelete={() => handleDeletePersona(persona.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Sessions tab */}
@@ -98,7 +204,7 @@ export default function Library({ onApiKeyClear }) {
               icon="[ ]"
               title="No sessions yet"
               sub="Run a prep session to see your history here"
-              action="New Session →"
+              action="New Session"
               onAction={() => navigate('/session')}
             />
           ) : (
@@ -116,7 +222,85 @@ export default function Library({ onApiKeyClear }) {
           )
         )}
       </div>
+
+      {/* Default role detail modal */}
+      {viewingRole && (
+        <DefaultRoleModal role={viewingRole} onClose={() => setViewingRole(null)} />
+      )}
+
       <Footer />
+    </div>
+  )
+}
+
+function DefaultRoleCard({ role, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? '#141414' : '#0d0d0d',
+        border: '1px solid #1e1e1e',
+        borderTop: '2px solid #333',
+        cursor: 'pointer',
+        padding: '16px',
+        transition: 'all 0.15s',
+        fontFamily: 'Poppins, sans-serif',
+      }}
+    >
+      <div style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{role.emoji}</div>
+      <p style={{ fontWeight: 700, fontSize: '0.85rem', color: '#d0d0d0', marginBottom: '4px' }}>{role.title}</p>
+      <p style={{ fontSize: '0.7rem', color: '#555', lineHeight: 1.4 }}>{role.descriptor}</p>
+      <p style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#444', marginTop: '10px' }}>
+        READ ONLY
+      </p>
+    </div>
+  )
+}
+
+function DefaultRoleModal({ role, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: '24px',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#111', border: '1px solid #2a2a2a', borderTop: '2px solid #00ff88',
+          maxWidth: '560px', width: '100%', padding: '32px',
+          fontFamily: 'Poppins, sans-serif', maxHeight: '80vh', overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div>
+            <span style={{ fontSize: '2rem' }}>{role.emoji}</span>
+            <h3 style={{ fontWeight: 800, fontSize: '1.1rem', color: '#f5f5f5', marginTop: '8px' }}>{role.title}</h3>
+            <p style={{ fontSize: '0.72rem', color: '#666', marginTop: '2px' }}>{role.descriptor}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ color: '#555', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', marginTop: '4px' }}
+            onMouseEnter={e => e.target.style.color = '#f5f5f5'}
+            onMouseLeave={e => e.target.style.color = '#555'}
+          >
+            &#10005;
+          </button>
+        </div>
+        <p className="label" style={{ marginBottom: '10px' }}>HOW THIS ROLE RESPONDS</p>
+        <p style={{ fontSize: '0.82rem', color: '#888', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+          {role.systemPrompt}
+        </p>
+        <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#333', marginTop: '24px', fontStyle: 'italic' }}>
+          This role is always available in every prep session and cannot be edited.
+        </p>
+      </div>
     </div>
   )
 }
@@ -159,7 +343,6 @@ function SessionCard({ session, expanded, onToggle, onDelete }) {
       fontFamily: 'Poppins, sans-serif',
       transition: 'all 0.2s',
     }}>
-      {/* Header row */}
       <div
         onClick={onToggle}
         onMouseEnter={() => setHovered(true)}
@@ -197,16 +380,13 @@ function SessionCard({ session, expanded, onToggle, onDelete }) {
             color: expanded ? '#00ff88' : hovered ? '#aaa' : '#555',
             userSelect: 'none', transition: 'color 0.2s',
           }}>
-            {expanded ? 'Close ▲' : 'View ▼'}
+            {expanded ? 'Close' : 'View'}
           </span>
         </div>
       </div>
 
-      {/* Expanded: conversations */}
       {expanded && (
         <div style={{ borderTop: '1px solid #1a1a1a', padding: '0 20px 24px' }}>
-
-          {/* Full proposal input */}
           {session.content && (
             <div style={{ marginTop: '18px', marginBottom: '4px' }}>
               <p className="label" style={{ marginBottom: '10px' }}>Your Input</p>
@@ -220,7 +400,6 @@ function SessionCard({ session, expanded, onToggle, onDelete }) {
             </div>
           )}
 
-          {/* Initial responses grid */}
           {responseCount > 0 && (
             <div style={{ marginTop: '20px' }}>
               <p className="label" style={{ marginBottom: '12px' }}>Initial Responses</p>
@@ -240,7 +419,6 @@ function SessionCard({ session, expanded, onToggle, onDelete }) {
             </div>
           )}
 
-          {/* Conversations */}
           {Object.entries(session.conversations || {}).map(([roleId, messages]) => {
             const participant = session.participants?.find(p => p.id === roleId)
             return (

@@ -37,7 +37,11 @@ export default function PrepSession({ onApiKeyClear }) {
   const [scenarioType, setScenarioType] = useState('Proposal')
   const [scenarioTypes, setScenarioTypes] = useState(DEFAULT_SCENARIO_TYPES)
   const [customInput, setCustomInput] = useState('')
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(() => {
+    const saved = localStorage.getItem('readtheroom_example_proposal') || ''
+    if (saved) localStorage.removeItem('readtheroom_example_proposal')
+    return saved
+  })
   const [selectedIds, setSelectedIds] = useState(new Set())
   // Per-role overrides — loaded from localStorage so they survive navigation
   const [roleOverrides, setRoleOverrides] = useState(loadOverrides)
