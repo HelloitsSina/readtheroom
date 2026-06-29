@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApiKeySettings from './ApiKeySettings.jsx'
 
-export default function Nav({ onApiKeyClear }) {
+export default function Nav() {
   const navigate = useNavigate()
   const [h0, setH0] = useState(false)
   const [h1, setH1] = useState(false)
@@ -63,7 +63,7 @@ export default function Nav({ onApiKeyClear }) {
         >
           New Session
         </button>
-        <ApiKeySettings onClear={onApiKeyClear || (() => {})} />
+        <ApiKeySettings />
       </div>
     </nav>
   )

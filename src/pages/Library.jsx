@@ -62,7 +62,7 @@ The meeting before the meeting matters here. Key stakeholders need a soft heads 
 
 const EXAMPLE_PROPOSAL_KEY = 'readtheroom_example_proposal'
 
-export default function Library({ onApiKeyClear }) {
+export default function Library() {
   const [tab, setTab] = useState('personas')
   const [personas, setPersonas] = useState([])
   const [sessions, setSessions] = useState([])
@@ -112,7 +112,7 @@ export default function Library({ onApiKeyClear }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Nav onApiKeyClear={onApiKeyClear} />
+      <Nav />
       <div style={{ flex: 1, padding: '48px' }}>
 
         {/* Header */}

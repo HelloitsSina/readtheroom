@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { getApiKey, setApiKey, clearApiKey, maskedKey } from '../lib/apiKey.js'
 
-export default function ApiKeySettings({ onClear }) {
+export default function ApiKeySettings() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [newKey, setNewKey] = useState('')
@@ -26,7 +26,6 @@ export default function ApiKeySettings({ onClear }) {
     clearApiKey()
     setOpen(false)
     setEditing(false)
-    onClear()
   }
 
   return (

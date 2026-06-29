@@ -4,10 +4,12 @@ import { DEFAULT_ROLES } from '../data/defaultRoles.js'
 import { getPersonas } from '../lib/storage.js'
 import { getInitialResponse, getContinuedResponse } from '../lib/claude.js'
 import { saveSession, getSessions, updateSessionConversation } from '../lib/sessions.js'
+import { hasApiKey } from '../lib/apiKey.js'
 import RoleCard from '../components/RoleCard.jsx'
 import ConversationThread from '../components/ConversationThread.jsx'
 import Nav from '../components/Nav.jsx'
 import Footer from '../components/Footer.jsx'
+import ApiKeyModal from '../components/ApiKeyModal.jsx'
 
 const DEFAULT_SCENARIO_TYPES = ['Proposal', 'Coffee Chat', 'Difficult Conversation', 'Other']
 
@@ -32,7 +34,7 @@ function loadOverrides() {
   try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}') } catch { return {} }
 }
 
-export default function PrepSession({ onApiKeyClear }) {
+export default function PrepSession() {
   const [step, setStep] = useState('setup')
   const [scenarioType, setScenarioType] = useState('Proposal')
   const [scenarioTypes, setScenarioTypes] = useState(DEFAULT_SCENARIO_TYPES)
@@ -48,6 +50,8 @@ export default function PrepSession({ onApiKeyClear }) {
   const [responses, setResponses] = useState({})
   const [activeRole, setActiveRole] = useState(null)
   const [sessionId, setSessionId] = useState(null)
+  const [showKeyModal, setShowKeyModal] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
   // Ref to accumulate responses for race-safe session saving
   const collectedRef = useRef({})
 
@@ -91,7 +95,17 @@ export default function PrepSession({ onApiKeyClear }) {
     setCustomInput('')
   }
 
-  async function handleRun() {
+  function handleRun() {
+    if (!canRun) return
+    if (!hasApiKey()) {
+      setPendingAction(() => () => runSession())
+      setShowKeyModal(true)
+      return
+    }
+    runSession()
+  }
+
+  async function runSession() {
     if (!canRun) return
     const sid = uuid()
     collectedRef.current = {}   // reset accumulator for this run
@@ -131,11 +145,22 @@ export default function PrepSession({ onApiKeyClear }) {
   if (step === 'conversation' && activeRole) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Nav onApiKeyClear={onApiKeyClear} />
+        <Nav />
         <ConversationThread
           role={activeRole}
           initialResponse={responses[activeRole.id]?.text}
           onSend={async (msg, history) => {
+            if (!hasApiKey()) {
+              return new Promise(resolve => {
+                setPendingAction(() => async () => {
+                  const updated = [...history, { role: 'user', content: msg }]
+                  const reply = await getContinuedResponse(activeRole, content, updated, scenarioType)
+                  if (sessionId) updateSessionConversation(sessionId, activeRole.id, [...updated, { role: 'assistant', content: reply }])
+                  resolve(reply)
+                })
+                setShowKeyModal(true)
+              })
+            }
             const updated = [...history, { role: 'user', content: msg }]
             const reply = await getContinuedResponse(activeRole, content, updated, scenarioType)
             if (sessionId) updateSessionConversation(sessionId, activeRole.id, [...updated, { role: 'assistant', content: reply }])
@@ -147,6 +172,12 @@ export default function PrepSession({ onApiKeyClear }) {
           responses={responses}
         />
         <Footer />
+        {showKeyModal && (
+          <ApiKeyModal
+            onSave={() => { setShowKeyModal(false); if (pendingAction) { pendingAction(); setPendingAction(null) } }}
+            onClose={() => { setShowKeyModal(false); setPendingAction(null) }}
+          />
+        )}
       </div>
     )
   }
@@ -161,7 +192,7 @@ export default function PrepSession({ onApiKeyClear }) {
 
     return (
       <div className="min-h-screen flex flex-col">
-        <Nav onApiKeyClear={onApiKeyClear} />
+        <Nav />
 
         {/* API key error banner */}
         {keyError && (
@@ -173,14 +204,7 @@ export default function PrepSession({ onApiKeyClear }) {
           }}>
             <span style={{ fontSize: '0.75rem', color: '#ff8080' }}>&#9888;</span>
             <p style={{ fontSize: '0.8rem', color: '#ff8080', flex: 1 }}>
-              Your API key seems invalid. Please check it in{' '}
-              <button
-                onClick={() => onApiKeyClear && onApiKeyClear()}
-                style={{ color: '#00ff88', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'Poppins, sans-serif', textDecoration: 'underline', padding: 0 }}
-              >
-                Settings
-              </button>
-              .
+              Your API key seems invalid. Update it using the API Key menu in the top right.
             </p>
             <button onClick={() => setStep('setup')} className="btn-ghost" style={{ fontSize: '0.7rem', flexShrink: 0 }}>
               &larr; Back
@@ -219,7 +243,7 @@ export default function PrepSession({ onApiKeyClear }) {
   // ── Setup ─────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col">
-      <Nav onApiKeyClear={onApiKeyClear} />
+      <Nav />
       <div style={{ flex: 1, padding: '48px', fontFamily: 'Poppins, sans-serif' }}>
 
         <p className="label" style={{ marginBottom: '12px' }}>&#9632; Prep Session</p>
@@ -333,6 +357,13 @@ export default function PrepSession({ onApiKeyClear }) {
         </div>
       </div>
       <Footer />
+
+      {showKeyModal && (
+        <ApiKeyModal
+          onSave={() => { setShowKeyModal(false); if (pendingAction) { pendingAction(); setPendingAction(null) } }}
+          onClose={() => { setShowKeyModal(false); setPendingAction(null) }}
+        />
+      )}
     </div>
   )
 }

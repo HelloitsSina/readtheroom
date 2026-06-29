@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import { extractPersona } from '../lib/claude.js'
 import { savePersona, getPersonaById } from '../lib/storage.js'
+import { hasApiKey } from '../lib/apiKey.js'
 import Nav from '../components/Nav.jsx'
 import Footer from '../components/Footer.jsx'
+import ApiKeyModal from '../components/ApiKeyModal.jsx'
 
 const EMPTY_PERSONA = {
   communicationStyle: '',
@@ -14,7 +16,7 @@ const EMPTY_PERSONA = {
   watchOutFor: ['', ''],
 }
 
-export default function PersonaBuilder({ onApiKeyClear }) {
+export default function PersonaBuilder() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isNew = id === 'new'
@@ -28,6 +30,8 @@ export default function PersonaBuilder({ onApiKeyClear }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [existingId, setExistingId] = useState(null)
+  const [pendingAction, setPendingAction] = useState(null)
+  const [showKeyModal, setShowKeyModal] = useState(false)
 
   useEffect(() => {
     if (!isNew) {
@@ -46,7 +50,13 @@ export default function PersonaBuilder({ onApiKeyClear }) {
     }
   }, [id, isNew])
 
-  async function handleExtract() {
+  function requireKey(action) {
+    if (hasApiKey()) { action(); return }
+    setPendingAction(() => action)
+    setShowKeyModal(true)
+  }
+
+  async function runExtract() {
     if (!rawNotes.trim()) return
     setLoading(true); setError(null)
     try {
@@ -63,7 +73,7 @@ export default function PersonaBuilder({ onApiKeyClear }) {
     finally { setLoading(false) }
   }
 
-  async function handleCalibrate() {
+  async function runCalibrate() {
     if (!calibration.trim()) return
     setLoading(true); setError(null)
     try {
@@ -79,6 +89,9 @@ export default function PersonaBuilder({ onApiKeyClear }) {
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
+
+  function handleExtract() { requireKey(runExtract) }
+  function handleCalibrate() { requireKey(runCalibrate) }
 
   function handleSave() {
     const now = Date.now()
@@ -98,7 +111,7 @@ export default function PersonaBuilder({ onApiKeyClear }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Nav onApiKeyClear={onApiKeyClear} />
+      <Nav />
       <div className="flex-1 px-8 md:px-12 py-12" style={{ maxWidth: '720px' }}>
 
         {step === 1 && (
@@ -225,6 +238,13 @@ export default function PersonaBuilder({ onApiKeyClear }) {
         )}
       </div>
       <Footer />
+
+      {showKeyModal && (
+        <ApiKeyModal
+          onSave={() => { setShowKeyModal(false); if (pendingAction) { pendingAction(); setPendingAction(null) } }}
+          onClose={() => { setShowKeyModal(false); setPendingAction(null) }}
+        />
+      )}
     </div>
   )
 }
